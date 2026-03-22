@@ -21,12 +21,12 @@ namespace RDVServices.Services
 		public RMCResult Login(string userName)
 		{
 			var hostAddress = string.IsNullOrWhiteSpace(QConfiguration.Instance.ServerBindAddress) ? Dns.GetHostName() : QConfiguration.Instance.ServerBindAddress;
-#if false
+
 			var rdvConnectionString = new StationURL(
 				"prudps",
 				hostAddress,
 				new Dictionary<string, int>() {
-					{ "port", Context.Client.sPort },
+					{ "port", QConfiguration.Instance.BackendServiceServerPort },
 					{ "CID", 1 },
 					{ "PID", (int)Context.Client.sPID },
 					{ "sid", 1 },
@@ -35,18 +35,23 @@ namespace RDVServices.Services
 				});
 
 			PlayerInfo playerInfo = null;
+			string ticketKey = Constants.NetZJadePassword;
 
 			if (userName == "guest" || userName == "Tracking")
 			{
 				QLog.WriteLine(1, $"User login request {userName}");
 
-				// TODO: do not create player info for Tracking
-
 				playerInfo = NetworkPlayers.CreatePlayerInfo(Context.Client);
 				if (userName == "Tracking")
+				{
 					playerInfo.PID = 0;
+					ticketKey = Constants.NetZJadePassword;
+				}
 				else if (userName == "guest")
+				{
 					playerInfo.PID = 100;
+					ticketKey = Constants.NetZGuestPassword;
+				}
 
 				playerInfo.AccountId = userName;
 				playerInfo.Name = userName;
@@ -57,7 +62,6 @@ namespace RDVServices.Services
 				if (user == null)
 					return Error((int)ErrorCode.RendezVous_InvalidUsername);
 
-				// create tracking client info
 				playerInfo = NetworkPlayers.GetPlayerInfoByUsername(userName);
 
 				if (playerInfo != null &&
@@ -74,23 +78,22 @@ namespace RDVServices.Services
 				playerInfo.PID = user.Id;
 				playerInfo.AccountId = user.Username;
 				playerInfo.Name = user.Username;
+				ticketKey = Constants.UbiDummyPassword;
 			}
 
 			var kerberos = new KerberosTicket(playerInfo.PID, Context.Client.sPID, Constants.SessionKey, Constants.TicketData);
 			var reply = new Login(playerInfo.PID)
 			{
-				retVal = (int)ErrorCode.Core_NoError,
+				retVal = (uint)ErrorCode.Core_NoError,
 				pConnectionData = new RVConnectionData()
 				{
 					m_urlRegularProtocols = rdvConnectionString,
 				},
 				strReturnMsg = "",
-				pbufResponse = kerberos.ToBuffer(Constants.NetZJadePassword)
+				pbufResponse = kerberos.ToBuffer(ticketKey)
 			};
 
 			return Result(reply);
-#endif
-			return Error(0);
 		}
 
 		/// <summary>

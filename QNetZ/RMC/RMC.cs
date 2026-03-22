@@ -52,7 +52,7 @@ namespace QNetZ
 			if (serviceFactory == null)
 			{
 				WriteLog(client, 1, $"Error: No service registered for packet protocol '{rmc.proto}' (protocolId = {(int)rmc.proto})");
-				handler.SendACK(rmcContext.Packet, client);
+				SendResponseWithACK(handler, rmcContext.Packet, rmc, client, new RMCPResponseEmpty(), false, (uint)Connection.ErrorCode.Core_NotImplemented);
 				return;
 			}
 
@@ -65,7 +65,7 @@ namespace QNetZ
 			if (bestMethod == null)
 			{
 				WriteLog(client, 1, $"Error: No method '{ rmc.methodID }' registered for protocol '{ rmc.proto }'");
-				handler.SendACK(rmcContext.Packet, client);
+				SendResponseWithACK(handler, rmcContext.Packet, rmc, client, new RMCPResponseEmpty(), false, (uint)Connection.ErrorCode.Core_NotImplemented);
 				return;
 			}
 

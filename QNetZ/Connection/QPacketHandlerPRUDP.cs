@@ -39,7 +39,7 @@ namespace QNetZ
 		{
 			// create protocol client
 			var qclient = GetQClientByEndPoint(from);
-			if (qclient == null)
+			if (qclient == null || qclient.State == QClient.StateType.Active)
 			{
 				qclient = NewQClient(from);
 			}
