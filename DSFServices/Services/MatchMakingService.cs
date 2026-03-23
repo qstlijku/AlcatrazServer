@@ -31,7 +31,9 @@ namespace DSFServices.Services
 				gathering.m_idMyself = ++GatheringIdCounter;
 				gathering.m_pidOwner = playerPid;
 
-				PartySessions.GatheringList.Add(new PartySessionGathering(gathering));
+				var newGathering = new PartySessionGathering(gathering);
+				newGathering.Participants.Add(playerPid);
+				PartySessions.GatheringList.Add(newGathering);
 
 				return Result(new { gatheringId = gathering.m_idMyself });
 			}
