@@ -49,7 +49,7 @@ namespace QNetZ
 			cfg.RDVServerPort = 21005;
 			cfg.BackendServiceServerPort = 21006;
 
-			cfg.ServerFilesPath = "ServerFiles/";
+			cfg.ServerFilesPath = "../../../../data/serverFiles/";
 
 			cfg.SandboxAccessKey = "w6kAtr3T";            // Server access key. Affects packet checksum;
 

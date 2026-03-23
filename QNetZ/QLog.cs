@@ -1,6 +1,7 @@
 ﻿using QNetZ.DDL;
 using QNetZ.Factory;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -25,11 +26,15 @@ namespace QNetZ
 		public static bool EnablePacketLogging = false;
 		public static bool EnableFileLogging = true;
 
+		private static readonly ConcurrentQueue<string> _logQueue = new ConcurrentQueue<string>();
+		private static readonly ConcurrentQueue<byte[]> _packetQueue = new ConcurrentQueue<byte[]>();
 		private static readonly object _sync = new object();
-		private static readonly object _filesync = new object();
 
-		private static StringBuilder logBuffer = new StringBuilder();
-		private static List<byte[]> logPackets = new List<byte[]>();
+		static QLog()
+		{
+			var t = new Thread(tFlushLoop) { IsBackground = true, Name = "QLog" };
+			t.Start();
+		}
 
 		public static void ClearLog()
 		{
@@ -38,12 +43,6 @@ namespace QNetZ
 
 			if (File.Exists(LogPacketsFileName))
 				File.Delete(LogPacketsFileName);
-
-			lock (_sync)
-			{
-				logBuffer = new StringBuilder();
-				logPackets = new List<byte[]>();
-			}
 		}
 
 		public static void WriteLine(int priority, Func<string> resolve, object color = null)
@@ -78,16 +77,8 @@ namespace QNetZ
 				if (priority <= MinPriority)
 					LogFunction(priority, logstr, c);
 
-				lock (_sync)
-				{
-					if(EnableFileLogging)
-						logBuffer.Append(logstr + "\n");
-
-					if(logBuffer.Length > 0 || logPackets.Count > 0)
-					{
-						new Thread(tSaveLog).Start();
-					}
-				}
+				if (EnableFileLogging)
+					_logQueue.Enqueue(logstr);
 			}
 			catch { }
 		}
@@ -334,43 +325,32 @@ namespace QNetZ
 			Helper.WriteU32(m, (uint)data.Length);
 			m.Write(data, 0, data.Length);
 
-			lock (_sync)
-			{
-				logPackets.Add(m.ToArray());
-			}
+			_packetQueue.Enqueue(m.ToArray());
 		}
 
-		public static void tSaveLog(object obj)
+		private static void tFlushLoop()
 		{
-			lock (_filesync)
+			while (true)
 			{
-				string buffer = null;
-				lock (_sync)
+				try
 				{
-					buffer = logBuffer.ToString();
-					logBuffer.Clear();
-				}
-
-				if (buffer != null && buffer.Length > 0)
-					File.AppendAllText(LogFileName, buffer);
-
-				byte[] packet = null;
-				lock (_sync)
-				{
-					if (logPackets.Count != 0)
+					if (!_logQueue.IsEmpty)
 					{
-						packet = logPackets[0];
-						logPackets.RemoveAt(0);
+						var sb = new StringBuilder();
+						while (_logQueue.TryDequeue(out var line))
+							sb.AppendLine(line);
+						File.AppendAllText(LogFileName, sb.ToString());
+					}
+
+					while (_packetQueue.TryDequeue(out var packet))
+					{
+						using var fs = new FileStream(LogPacketsFileName, FileMode.Append, FileAccess.Write);
+						fs.Write(packet, 0, packet.Length);
 					}
 				}
-				if (packet != null)
-				{
-					FileStream fs = new FileStream(LogPacketsFileName, FileMode.Append, FileAccess.Write);
-					fs.Write(packet, 0, packet.Length);
-					fs.Flush();
-					fs.Close();
-				}
-				Thread.Sleep(1);
+				catch { }
+
+				Thread.Sleep(50);
 			}
 		}
 	}
