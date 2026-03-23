@@ -46,14 +46,16 @@ namespace QNetZ
 			var cfg = new QConfiguration();
 
 			cfg.ServerBindAddress = serverBindAddress ?? "127.0.0.1";
-			cfg.RDVServerPort = 21005;
+			cfg.RDVServerPort = 21001; // for Watch Dogs
+			//cfg.RDVServerPort = 21005;
 			cfg.BackendServiceServerPort = 21006;
 
 			cfg.ServerFilesPath = "../../../../data/serverFiles/";
 
-			cfg.SandboxAccessKey = "w6kAtr3T";            // Server access key. Affects packet checksum;
+			cfg.SandboxAccessKey = "p4BkcPBh"; // for WD1
+          //cfg.SandboxAccessKey = "w6kAtr3T";            // Server access key. Affects packet checksum;
 
-			cfg.DbType = 0;
+            cfg.DbType = 0;
 			cfg.DbConnectionString = "Data Source=database.sqlite";
 
 			return cfg;

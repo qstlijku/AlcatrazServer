@@ -40,7 +40,7 @@ namespace BackendDebugServer
 				LogPrintFunc(priority, s, color);
 			};
 
-            toolStripComboBox1.SelectedIndex = 0;
+            toolStripComboBox1.SelectedIndex = 3;
         }
 
         private void toolStripButton1_Click(object sender, EventArgs e)
