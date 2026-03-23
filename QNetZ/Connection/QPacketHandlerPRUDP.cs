@@ -47,9 +47,12 @@ namespace QNetZ
 			QLog.WriteLine(2, $"[{SourceName}] Got SYN packet");
 			qclient.SeqCounterOut = 0;
 
+			var synPayload = p.payload;
 			p.m_uiConnectionSignature = qclient.IDrecv;
 
-			return MakeACK(p, qclient);
+			var ack = MakeACK(p, qclient);
+			ack.payload = synPayload;
+			return ack;
 		}
 
 		private QPacket ProcessCONNECT(QClient client, QPacket p)
