@@ -29,6 +29,31 @@ namespace QNetZ
 			}
 		}
 
+		public uint SandboxAccessKeyWordSum
+		{
+			get
+			{
+				if (SandboxAccessKey == null)
+					return 0;
+
+				var bytes = Encoding.ASCII.GetBytes(SandboxAccessKey);
+				uint sum = 0;
+				int wordCount = (bytes.Length + 3) / 4;
+				for (int i = 0; i < wordCount; i++)
+				{
+					uint word = 0;
+					for (int b = 0; b < 4; b++)
+					{
+						int idx = i * 4 + b;
+						if (idx < bytes.Length)
+							word |= (uint)bytes[idx] << (b * 8);
+					}
+					sum += word;
+				}
+				return sum;
+			}
+		}
+
 
 		// -------------------------------------------------------- static shit
 		static QConfiguration _instance;

@@ -92,7 +92,7 @@ namespace QNetZ
 		public byte m_byPartNumber;
 		public ushort payloadSize;
 		public byte[] payload;
-		public byte checkSum;
+		public uint checkSum;
 		public bool usesCompression = true;
 		public uint realSize;
 
@@ -128,7 +128,7 @@ namespace QNetZ
 			if (flags.Contains(PACKETFLAG.FLAG_HAS_SIZE))
 				payloadSize = Helper.ReadU16(stream);
 			else
-				payloadSize = (ushort)(stream.Length - stream.Position - 1);
+				payloadSize = (ushort)(stream.Length - stream.Position - 4);
 
 			MemoryStream pl = new MemoryStream();
 
@@ -160,7 +160,7 @@ namespace QNetZ
 				payloadSize = (ushort)payload.Length;
 			}
 
-			checkSum = Helper.ReadU8(stream);
+			checkSum = Helper.ReadU32(stream);
 			realSize = (uint)stream.Position;
 		}
 
@@ -236,22 +236,24 @@ namespace QNetZ
 
 		private byte[] AddCheckSum(byte[] buff)
 		{
-			byte[] result = new byte[buff.Length + 1];
+			byte[] result = new byte[buff.Length + 4];
 
 			for (int i = 0; i < buff.Length; i++)
 				result[i] = buff[i];
 
-			result[buff.Length] = checkSum = MakeChecksum(buff);
+			checkSum = MakeChecksum(buff);
+			byte[] cs = BitConverter.GetBytes(checkSum);
+			cs.CopyTo(result, buff.Length);
 
 			return result;
 		}
 
-		private static byte GetProtocolSetting(byte proto)
+		private static uint GetProtocolSetting(byte proto)
 		{
 			switch (proto)
 			{
 				case 3:
-					return QConfiguration.Instance.SandboxAccessKeyCheckSum;
+					return QConfiguration.Instance.SandboxAccessKeyWordSum;
 				case 1:
 				case 5:
 				default:
@@ -259,39 +261,27 @@ namespace QNetZ
 			}
 		}
 
-		public static byte MakeChecksum(byte[] data, byte setting = 0xFF)
+		public static uint MakeChecksum(byte[] data, uint setting = 0xFFFFFFFF)
 		{
-			if (setting == 0xFF)
+			if (setting == 0xFFFFFFFF)
 				setting = GetProtocolSetting((byte)(data[0] >> 4));
 
-			uint tmp = 0;
-			for (int i = 0; i < data.Length / 4; i++)
-				tmp += BitConverter.ToUInt32(data, i * 4);
+			uint sum = setting;
 
-			uint leftOver = (uint)data.Length & 3;
-			uint processed = 0;
-			byte tmp2 = 0, tmp3 = 0, tmp4 = 0;
-			uint pos = (uint)data.Length - leftOver;
-
-			if (leftOver >= 2)
+			int wordCount = (data.Length + 3) / 4;
+			for (int i = 0; i < wordCount; i++)
 			{
-				processed = 2;
-				tmp2 = data[pos];
-				tmp3 = data[pos + 1];
-				pos += 2;
+				uint word = 0;
+				for (int b = 0; b < 4; b++)
+				{
+					int idx = i * 4 + b;
+					if (idx < data.Length)
+						word |= (uint)data[idx] << (b * 8);
+				}
+				sum += word;
 			}
 
-			if (processed >= leftOver)
-				tmp4 = setting;
-			else
-				tmp4 = (byte)(setting + data[pos]);
-
-			var result = (byte)((byte)(tmp >> 24) +
-						 (byte)(tmp >> 16) +
-						 (byte)(tmp >> 8) +
-						 (byte)tmp + tmp2 + tmp3 + tmp4);
-
-			return result;
+			return sum;
 		}
 
 		private void ExtractFlags()
@@ -332,7 +322,7 @@ namespace QNetZ
 			foreach (byte b in payload)
 				sb.Append(b.ToString("X2") + " ");
 			sb.AppendLine();
-			sb.AppendLine("\tChecksum     : 0x" + checkSum.ToString("X2"));
+			sb.AppendLine("\tChecksum     : 0x" + checkSum.ToString("X8"));
 			sb.AppendLine("}");
 			return sb.ToString();
 		}
