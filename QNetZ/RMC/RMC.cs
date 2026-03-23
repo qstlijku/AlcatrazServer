@@ -18,11 +18,82 @@ namespace QNetZ
 			if (p.uiSeqId > client.SeqCounter)
 				client.SeqCounter = p.uiSeqId;
 
+			if (QRVPacket.IsQRVFormat(p.payload))
+			{
+				HandleQRVPacket(handler, client, p);
+				return;
+			}
+
 			var rmc = new RMCPacket(p);
 			if (rmc.isRequest)
 				HandleRequest(handler, client, p, rmc);
 			else
 				HandleResponse(handler, client, p, rmc);
+		}
+
+		private static void HandleQRVPacket(QPacketHandlerPRUDP handler, QClient client, QPacket p)
+		{
+			var qrv = new QRVPacket(p.payload);
+
+			var clientName = client.PlayerInfo != null ? client.PlayerInfo.Name : "<unkClient>";
+			QLog.WriteLine(2, $"[QRV] ({clientName}) {(qrv.IsRequest ? "Request" : "Response")}: {qrv}");
+
+			if (!qrv.IsRequest)
+			{
+				handler.SendACK(p, client);
+				return;
+			}
+
+			handler.SendACK(p, client);
+
+			byte[] responseData = null;
+			bool handled = true;
+
+			switch (qrv.MethodName)
+			{
+				case "SimpleAuthenticationProtocol::LoginWithToken_V2":
+					responseData = HandleLoginWithToken_V2(client);
+					break;
+				default:
+					QLog.WriteLine(1, $"[QRV] Unhandled method: {qrv.MethodName}");
+					handled = false;
+					break;
+			}
+
+			if (!handled)
+				return;
+
+			SendQRVResponse(handler, p, client, qrv.MakeSuccessResponse(responseData));
+		}
+
+		private static byte[] HandleLoginWithToken_V2(QClient client)
+		{
+			var playerInfo = NetworkPlayers.CreatePlayerInfo(client);
+			playerInfo.PID = 1;
+			playerInfo.AccountId = "00000000-0000-0000-0000-000000000001";
+			playerInfo.Name = "Player1";
+
+			client.PlayerInfo = playerInfo;
+			playerInfo.Client = client;
+
+			QLog.WriteLine(1, $"[QRV] LoginWithToken_V2: logged in as PID={playerInfo.PID} name={playerInfo.Name}");
+
+			// Return minimal response — U32 retVal = 0 (success)
+			var m = new System.IO.MemoryStream();
+			Helper.WriteU32(m, 0);
+			return m.ToArray();
+		}
+
+		private static void SendQRVResponse(QPacketHandlerPRUDP handler, QPacket p, QClient client, byte[] responseBytes)
+		{
+			var np = new QPacket(p.toBuffer());
+			np.flags = new List<QPacket.PACKETFLAG>() { QPacket.PACKETFLAG.FLAG_NEED_ACK, QPacket.PACKETFLAG.FLAG_RELIABLE };
+			np.m_oSourceVPort = p.m_oDestinationVPort;
+			np.m_oDestinationVPort = p.m_oSourceVPort;
+			np.m_uiSignature = client.IDsend;
+			np.usesCompression = false;
+
+			handler.MakeAndSend(client, p, np, responseBytes);
 		}
 
 		public static void HandleResponse(QPacketHandlerPRUDP handler, QClient client, QPacket p, RMCPacket rmc)
