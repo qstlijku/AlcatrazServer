@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 
 namespace QNetZ
 {
@@ -69,7 +70,7 @@ namespace QNetZ
 		private static byte[] HandleLoginWithToken_V2(QClient client)
 		{
 			var playerInfo = NetworkPlayers.CreatePlayerInfo(client);
-			playerInfo.PID = 1;
+			playerInfo.PID = 2;
 			playerInfo.AccountId = "00000000-0000-0000-0000-000000000001";
 			playerInfo.Name = "Player1";
 
@@ -78,9 +79,32 @@ namespace QNetZ
 
 			QLog.WriteLine(1, $"[QRV] LoginWithToken_V2: logged in as PID={playerInfo.PID} name={playerInfo.Name}");
 
-			// Return minimal response — U32 retVal = 0 (success)
-			var m = new System.IO.MemoryStream();
+			var m = new MemoryStream();
+
+			// 16-byte opaque auth blob (zeros — server accepts any on reconnect)
+			m.Write(new byte[16], 0, 16);
+
+			// Station URL 1: our server (client will connect/continue here)
+			var host = QConfiguration.Instance.ServiceURLHostName
+				?? QConfiguration.Instance.ServerBindAddress
+				?? "127.0.0.1";
+			var port = QConfiguration.Instance.RDVServerPort;
+			var url1 = $"prudp:/address={host};port={port};CID=1;PID={playerInfo.PID};sid=1;stream=3;type=2";
+			var url1Bytes = Encoding.ASCII.GetBytes(url1 + "\0");
+			Helper.WriteU16(m, (ushort)url1Bytes.Length);
+			m.Write(url1Bytes, 0, url1Bytes.Length);
+
+			// 4 zero bytes (padding / reserved)
 			Helper.WriteU32(m, 0);
+
+			// Station URL 2: minimal fallback
+			var url2Bytes = Encoding.ASCII.GetBytes("prudp:/\0");
+			Helper.WriteU16(m, (ushort)url2Bytes.Length);
+			m.Write(url2Bytes, 0, url2Bytes.Length);
+
+			// 4 zero bytes (padding / reserved)
+			Helper.WriteU32(m, 0);
+
 			return m.ToArray();
 		}
 

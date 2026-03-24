@@ -80,9 +80,14 @@ namespace QNetZ
 			Helper.WriteU16(body, (ushort)protoBytes.Length);
 			body.Write(protoBytes, 0, protoBytes.Length);
 
-			Helper.WriteU8(body, 2); // type = response
+			Helper.WriteU8(body, 0); // type = 0 (response, matching real Quazal server)
 			Helper.WriteU8(body, 1); // success
 			Helper.WriteU32(body, CallID);
+
+			// Real server includes method name (with * suffix) in response
+			var methodBytes = Encoding.ASCII.GetBytes(MethodName + "*\0");
+			Helper.WriteU16(body, (ushort)methodBytes.Length);
+			body.Write(methodBytes, 0, methodBytes.Length);
 
 			if (data != null && data.Length > 0)
 				body.Write(data, 0, data.Length);
