@@ -55,6 +55,9 @@ namespace QNetZ
 				case "SimpleAuthenticationProtocol::LoginWithToken_V2":
 					responseData = HandleLoginWithToken_V2(client);
 					break;
+				case "SimpleAuthenticationProtocol::Register_V1":
+					responseData = HandleRegister_V1(client, qrv);
+					break;
 				default:
 					QLog.WriteLine(1, $"[QRV] Unhandled method: {qrv.MethodName}");
 					handled = false;
@@ -106,6 +109,29 @@ namespace QNetZ
 			Helper.WriteU32(m, 0);
 
 			return m.ToArray();
+		}
+
+		private static byte[] HandleRegister_V1(QClient client, QRVPacket qrv)
+		{
+			// Parse the client's station URL from parameters
+			// Format: [U32 reserved][U32 url_count][U16 url_len][url\0]...
+			var m = new MemoryStream(qrv.ParameterData);
+			Helper.ReadU32(m); // reserved
+			uint urlCount = Helper.ReadU32(m);
+			for (uint i = 0; i < urlCount; i++)
+			{
+				ushort urlLen = Helper.ReadU16(m);
+				var urlBytes = new byte[urlLen];
+				m.Read(urlBytes, 0, urlLen);
+				var url = Encoding.ASCII.GetString(urlBytes).TrimEnd('\0');
+				QLog.WriteLine(1, $"[QRV] Register_V1: client URL[{i}] = {url}");
+			}
+
+			// Response: retVal=0 (success), CID=1 (connection ID assigned to this client)
+			var resp = new MemoryStream();
+			Helper.WriteU32(resp, 0); // retVal = success
+			Helper.WriteU32(resp, 1); // CID
+			return resp.ToArray();
 		}
 
 		private static void SendQRVResponse(QPacketHandlerPRUDP handler, QPacket p, QClient client, byte[] responseBytes)
