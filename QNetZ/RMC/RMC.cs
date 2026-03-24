@@ -58,6 +58,61 @@ namespace QNetZ
 				case "SimpleAuthenticationProtocol::Register_V1":
 					responseData = HandleRegister_V1(client, qrv);
 					break;
+
+				// -- Post-auth init --
+				case "GameConfigProtocol::GetConfig_V2":
+					responseData = new byte[] { 0x00, 0x00, 0x00, 0x00 }; // empty config map
+					break;
+
+				case "Tracking2Protocol::GetStartupStats_V1":
+					break; // empty success
+
+				case "PrivilegesProtocol::GetPrivileges_V1":
+					responseData = HandleGetPrivileges_V1();
+					break;
+
+				case "LocalizationProtocol::SetLocaleCode_V1":
+					break; // empty success
+
+				case "PrivilegesProtocol::ActivateKey_V1":
+					break; // accept any DLC key
+
+				// -- Social / UI data --
+				case "NewsProtocol::GetNewsByChannelType_V1":
+					responseData = new byte[] { 0x00, 0x00, 0x00, 0x00 }; // empty list
+					break;
+
+				case "FriendSyncProtocol::SyncFriends_V1":
+					break; // empty success
+
+				case "TransactionProtocol::GetUnverifiedTransactions_V3":
+					responseData = new byte[] { 0x00, 0x00, 0x00, 0x00 }; // empty list
+					break;
+
+				case "LeaderboardsProtocol::GetLeaderboardOverviewWithEstimatedUserPositionAndDefaultSorting_V2":
+					break; // empty success
+
+				// -- Session / Matchmaking --
+				case "GameSessionProtocol::RegisterURLs_V1":
+					HandleRegisterURLs_V1(client, qrv);
+					break;
+
+				case "ServerMatchMakingProtocol::SetPlayerBlocklist_V1":
+					break; // empty success
+
+				case "ServerMatchMakingProtocol::SetPlayerAvailableForMatchMaking_V5":
+					break; // empty success (no match on private server)
+
+				case "ServerMatchMakingProtocol::CancelMatchmakingRequest_V1":
+					break; // empty success
+
+				case "GameSessionProtocol::CreateSession_V1":
+					responseData = HandleCreateSession_V1(client, qrv);
+					break;
+
+				case "GameSessionProtocol::AddParticipants_V1":
+					break; // empty success
+
 				default:
 					QLog.WriteLine(1, $"[QRV] Unhandled method: {qrv.MethodName}");
 					handled = false;
@@ -118,6 +173,7 @@ namespace QNetZ
 			var m = new MemoryStream(qrv.ParameterData);
 			Helper.ReadU32(m); // reserved
 			uint urlCount = Helper.ReadU32(m);
+			string clientUrl = null;
 			for (uint i = 0; i < urlCount; i++)
 			{
 				ushort urlLen = Helper.ReadU16(m);
@@ -125,13 +181,59 @@ namespace QNetZ
 				m.Read(urlBytes, 0, urlLen);
 				var url = Encoding.ASCII.GetString(urlBytes).TrimEnd('\0');
 				QLog.WriteLine(1, $"[QRV] Register_V1: client URL[{i}] = {url}");
+				if (i == 0) clientUrl = url;
 			}
 
-			// Response: retVal=0 (success), CID=1 (connection ID assigned to this client)
+			// Response: retVal=0 (success), CID=1, plus the client's public station URL
 			var resp = new MemoryStream();
 			Helper.WriteU32(resp, 0); // retVal = success
 			Helper.WriteU32(resp, 1); // CID
+			// Echo client URL back as public station URL (required by Quazal Register protocol)
+			var publicUrl = clientUrl ?? "prudp:/";
+			var publicUrlBytes = Encoding.ASCII.GetBytes(publicUrl + "\0");
+			Helper.WriteU16(resp, (ushort)publicUrlBytes.Length);
+			resp.Write(publicUrlBytes, 0, publicUrlBytes.Length);
 			return resp.ToArray();
+		}
+		private static byte[] HandleGetPrivileges_V1()
+		{
+			// Return minimal privilege list: privilege ID=1 (online access), is_active=1
+			// Format mirrors how the real server responds: U32 count + [U32 id + U8 active] per privilege
+			var m = new MemoryStream();
+			Helper.WriteU32(m, 1);  // count = 1
+			Helper.WriteU32(m, 1);  // privilege_id = 1 (online multiplayer)
+			Helper.WriteU8(m, 1);   // is_active = true
+			return m.ToArray();
+		}
+
+		private static void HandleRegisterURLs_V1(QClient client, QRVPacket qrv)
+		{
+			// Parse and log the client P2P URLs
+			// Format: [U32 NamPro count=0] [U32 url_count] [U16 url_len][url\0]...
+			var m = new MemoryStream(qrv.ParameterData);
+			Helper.ReadU32(m); // NamPro count
+			uint urlCount = Helper.ReadU32(m);
+			for (uint i = 0; i < urlCount; i++)
+			{
+				ushort urlLen = Helper.ReadU16(m);
+				var urlBytes = new byte[urlLen];
+				m.Read(urlBytes, 0, urlLen);
+				var url = System.Text.Encoding.ASCII.GetString(urlBytes).TrimEnd('\0');
+				QLog.WriteLine(1, $"[QRV] RegisterURLs_V1: client URL[{i}] = {url}");
+			}
+		}
+
+		private static uint _nextSessionId = 0x00010001;
+
+		private static byte[] HandleCreateSession_V1(QClient client, QRVPacket qrv)
+		{
+			uint sessionId = _nextSessionId++;
+			QLog.WriteLine(1, $"[QRV] CreateSession_V1: session={sessionId:X8} player={client.PlayerInfo?.Name}");
+			// Return 8-byte session key (U32 low + U32 high)
+			var m = new MemoryStream();
+			Helper.WriteU32(m, sessionId);
+			Helper.WriteU32(m, 0);
+			return m.ToArray();
 		}
 
 		private static void SendQRVResponse(QPacketHandlerPRUDP handler, QPacket p, QClient client, byte[] responseBytes)
