@@ -113,6 +113,12 @@ namespace QNetZ
 				case "GameSessionProtocol::AddParticipants_V1":
 					break; // empty success
 
+				case "GameSessionProtocol::AbandonSession_V1":
+					break; // empty success
+
+				case "LeaderboardsProtocol::GetLeaderboardOverviewWithDefaultSorting_V2":
+					break; // empty success
+
 				default:
 					QLog.WriteLine(1, $"[QRV] Unhandled method: {qrv.MethodName}");
 					handled = false;
