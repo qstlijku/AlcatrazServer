@@ -184,9 +184,9 @@ namespace QNetZ
 				if (i == 0) clientUrl = url;
 			}
 
-			// Response: retVal=0 (success), CID=1, plus the client's public station URL
+			// Response: retVal=0x00010001 (Quazal success), CID=1, plus the client's public station URL
 			var resp = new MemoryStream();
-			Helper.WriteU32(resp, 0); // retVal = success
+			Helper.WriteU32(resp, 0x00010001); // retVal = Quazal Core::Success
 			Helper.WriteU32(resp, 1); // CID
 			// Echo client URL back as public station URL (required by Quazal Register protocol)
 			var publicUrl = clientUrl ?? "prudp:/";
