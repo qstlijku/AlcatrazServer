@@ -106,6 +106,9 @@ namespace QNetZ
 				case "ServerMatchMakingProtocol::CancelMatchmakingRequest_V1":
 					break; // empty success
 
+				case "ServerMatchMakingProtocol::SetPlayerUnavailableForMatchMaking_V1":
+					break; // empty success
+
 				case "GameSessionProtocol::CreateSession_V1":
 					responseData = HandleCreateSession_V1(client, qrv);
 					break;
