@@ -139,29 +139,24 @@ namespace QNetZ
 
 			var m = new MemoryStream();
 
-			// 16-byte opaque auth blob (zeros — server accepts any on reconnect)
-			m.Write(new byte[16], 0, 16);
+			// qUUID: 16 bytes. Must not equal the sentinel 00000000-0000-0000-0000-000000000002
+			// (sentinel would skip RegisterURLs and bypass SecureConnection setup).
+			// Use 00000000-0000-0000-0000-000000000001 as a fixed session UUID.
+			m.Write(new byte[] { 0,0,0,0, 0,0, 0,0, 0,0, 0,0,0,0,0,1 }, 0, 16);
 
-			// Station URL 1: our server (client will connect/continue here)
+			// RVConnectionData (DDL-encoded) — tells the client where to open its SecureConnection:
+			//   m_urlRegularProtocols  [U16 len+1][chars][null]
+			//   m_lstSpecialProtocols  [U32 count=0]
+			//   m_urlSpecialProtocols  [U16 len+1][chars][null]
 			var host = QConfiguration.Instance.ServiceURLHostName
 				?? QConfiguration.Instance.ServerBindAddress
 				?? "127.0.0.1";
 			var port = QConfiguration.Instance.RDVServerPort;
-			var url1 = $"prudp:/address={host};port={port};CID=1;PID={playerInfo.PID};sid=1;stream=3;type=2";
-			var url1Bytes = Encoding.ASCII.GetBytes(url1 + "\0");
-			Helper.WriteU16(m, (ushort)url1Bytes.Length);
-			m.Write(url1Bytes, 0, url1Bytes.Length);
+			var secureUrl = $"prudp:/address={host};port={port};CID=1;PID={playerInfo.PID};sid=1;stream=3;type=2";
 
-			// 4 zero bytes (padding / reserved)
-			Helper.WriteU32(m, 0);
-
-			// Station URL 2: minimal fallback
-			var url2Bytes = Encoding.ASCII.GetBytes("prudp:/\0");
-			Helper.WriteU16(m, (ushort)url2Bytes.Length);
-			m.Write(url2Bytes, 0, url2Bytes.Length);
-
-			// 4 zero bytes (padding / reserved)
-			Helper.WriteU32(m, 0);
+			Helper.WriteString(m, secureUrl);  // m_urlRegularProtocols
+			Helper.WriteU32(m, 0);             // m_lstSpecialProtocols (empty)
+			Helper.WriteString(m, secureUrl);  // m_urlSpecialProtocols
 
 			return m.ToArray();
 		}
